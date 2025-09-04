@@ -1,0 +1,5 @@
+node_modules
+src/app/config/config.json
+uploads
+git_push.sh
+.env

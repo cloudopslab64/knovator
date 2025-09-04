@@ -1,0 +1,338 @@
+<div class="mt-4" id="mainContent">
+  <div class="form-group">
+    <div class="col-md-3 mb-3">
+      <label for="modelName">Model Name:</label>
+      <select id="modelName" class="form-control mt-1">
+        <option>Select Model</option>
+      </select>
+    </div>
+
+    <!-- Where Condition Section -->
+    <div id="whereConditionHide">
+      <div class="condition_title_and_btn_container">
+        <h4 class="condition_title">Where Condition</h4>
+        <button class="btn btn-primary mb-2 addWhereConditionButton">
+          Add
+        </button>
+      </div>
+      <div id="whereConditionContainer">
+        <div class="row mb-2 where-condition-row">
+          <div class="col-md-4">
+            <select class="form-control whereColumnSelect">
+              <option value="" disabled selected>Select Column</option>
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <select class="form-control whereConditionSelect">
+              <option value="" disabled selected>Select Condition</option>
+              <option value="=">=</option>
+              <option value="LIKE">LIKE</option>
+              <option value="IN (...)">IN (...)</option>
+              <option value="NOT IN (...)">NOT IN (...)</option>
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <input
+              type="text"
+              class="form-control whereConditionValue"
+              placeholder="Value" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button id="generateTableButton" class="btn btn-primary mt-3 mb-3">
+      Generate Table
+    </button>
+
+    <div class="container mt-3">
+      <h2 id="responseModelName"></h2>
+      <table id="dataTable" class="table table-bordered">
+        <thead>
+          <tr id="tableHeaders"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+  <script>
+let api_url=""
+     window.onload = function () {
+       api_url= config.base_url
+       console.log("laeeque")
+       console.log(JSON.stringify(api_url))
+      const loginUser = localStorage.getItem("loginUser");
+      if (!loginUser) {
+        window.location.href = "/login";
+      }
+    };
+
+
+    $(document).ready(function () {
+      const modelNameSelect = $("#modelName");
+      const additionalRelationsContainer = $("#additionalRelations tbody");
+      let fetchedData = [];
+
+      // Fetch all data with a single API call and populate the dropdowns
+      fetchAllData();
+
+      function fetchAllData() {
+        console.log(`${api_url}/masters/api/modelList`)
+        fetch(`${api_url}/api/masters/modelList`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code === 1 && Array.isArray(data.data)) {
+              fetchedData = data.data;
+              // Populate the Model dropdown
+              populateDropdown(modelNameSelect, fetchedData, "Select Model");
+            } else {
+              console.error(
+                "Failed to fetch data or unexpected data structure"
+              );
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+
+      function populateDropdown(selectElement, items, defaultText) {
+        selectElement.empty().append(`<option>${defaultText}</option>`);
+        items.forEach((item) => {
+          selectElement.append(new Option(item, item));
+        });
+      }
+
+      // Model selection change
+      modelNameSelect.on("change", function () {
+        const selectedModel = $(this).val();
+        if (selectedModel && selectedModel !== "Select Model") {
+          $("#whereConditionHide").show();
+          fetchColumnList(selectedModel, ".whereColumnSelect");
+        } else {
+          $("#whereConditionHide").hide();
+        }
+      });
+
+      function fetchColumnList(modelName, targetSelect) {
+        fetch(`${api_url}/columnListByModel/${modelName}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code === 1 && Array.isArray(data.data)) {
+              populateDropdown($(targetSelect), data.data, "Select Column");
+            } else {
+              console.error(
+                "Failed to fetch column list or unexpected data structure"
+              );
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+
+      function updateSrNo(container) {
+        container.children().each(function (index) {
+          $(this)
+            .find(".sr-no")
+            .text(index + 1);
+        });
+      }
+    });
+
+    // handle Add new filed whereCondition
+    $(document).on("click", ".addWhereConditionButton", function (e) {
+      e.preventDefault();
+
+      // Find the last row in the container
+      const $row = $("#whereConditionContainer .where-condition-row").last();
+      const column = $row.find(".whereColumnSelect").val();
+      const condition = $row.find(".whereConditionSelect").val();
+      let value = $row.find(".whereConditionValue").val();
+
+      if (column && condition && value) {
+        const newRow = $row.clone(); // Clone the last row
+        //newRow.find('.whereColumnSelect').val('');
+        newRow.find(".whereConditionSelect").val("");
+        newRow.find(".whereConditionValue").val("");
+        $("#whereConditionContainer").append(newRow);
+      } else {
+        alert("Please select a column, condition, and provide a value.");
+      }
+    });
+
+    // Function to generate the payload
+    let filteredResponse = null;
+    async function generateTable() {
+      const modelName = $("#modelName").val();
+
+      // Collect Where Condition data
+      let whereCondition = {};
+      $("#whereConditionContainer .row").each(function () {
+        const column = $(this).find(".whereColumnSelect").val();
+        const condition = $(this).find(".whereConditionSelect").val();
+        let value = $(this).find(".whereConditionValue").val();
+
+        // Check if a valid column and condition are selected
+        if (column && condition) {
+          if (condition === "=") {
+            whereCondition[column] = value;
+          } else if (condition === "LIKE") {
+            whereCondition[column] = { like: value };
+          } else if (condition === "IN (...)") {
+            const valuesArray = value.split(",").map((v) => v.trim());
+
+            if (whereCondition[column] && whereCondition[column].in) {
+              whereCondition[column].in = [
+                ...new Set([...whereCondition[column].in, ...valuesArray]),
+              ];
+            } else {
+              whereCondition[column] = { in: valuesArray };
+            }
+          } else if (condition === "NOT IN (...)") {
+            const valuesArray = value.split(",").map((v) => v.trim());
+
+            if (whereCondition[column] && whereCondition[column].notin) {
+              whereCondition[column].notin = [
+                ...new Set([...whereCondition[column].notin, ...valuesArray]),
+              ];
+            } else {
+              whereCondition[column] = { notin: valuesArray };
+            }
+          }
+        }
+      });
+
+      // Construct the final payload
+      const payload = {
+        modelName,
+        whereCondition,
+      };
+      
+
+      // Get the filtered response
+      filteredResponse = await buildResponse(payload);
+      fetchTableData(filteredResponse);
+    }
+
+    function fetchTableData(filteredResponseData) {
+      fetch(`${api_url}/getRecords`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(filteredResponseData),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.code === 1) {
+            const tableHeaders = document.getElementById("tableHeaders");
+            const tableBody = document.getElementById("tableBody");
+
+            // Clear previous table data
+            tableHeaders.innerHTML = "";
+            tableBody.innerHTML = "";
+
+            // Check if data is present
+            if (data.data && data.data.length > 0) {
+              // Generate table headers based on the keys of the first data object
+              const sortedData = data.data.sort((a, b) => a.id - b.id);
+              const keys = Object.keys(data.data[0]);
+              keys.forEach((key) => {
+                const th = document.createElement("th");
+                th.textContent = key;
+                tableHeaders.appendChild(th);
+              });
+
+              // Generate table rows
+              sortedData.forEach((item) => {
+                const tr = document.createElement("tr");
+
+                keys.forEach((key) => {
+                  const td = document.createElement("td");
+                  td.textContent = item[key]; // Populate cell with data
+                  tr.appendChild(td);
+                });
+
+                tableBody.appendChild(tr); // Add row to the table body
+              });
+            } else {
+              console.error("No data available");
+            }
+          } else {
+            console.error("Failed to fetch data or unexpected data structure");
+            tableHeaders.innerHTML = "";
+            tableBody.innerHTML = "";
+          }
+        })
+        .catch((error) => {
+          const tableHeaders = document.getElementById("tableHeaders");
+          const tableBody = document.getElementById("tableBody");
+          tableHeaders.innerHTML = "";
+          tableBody.innerHTML = "";
+          console.error("Error:", error);
+        });
+    }
+
+    function buildResponse(payload) {
+      const { modelName, whereCondition } = payload;
+
+      // Building the response with only necessary fields
+      const response = {
+        modelName,
+        whereCondition:
+          whereCondition && Object.keys(whereCondition).length
+            ? whereCondition
+            : undefined,
+      };
+
+      // Remove undefined fields from the response
+      Object.keys(response).forEach((key) => {
+        if (response[key] === undefined) {
+          delete response[key];
+        }
+      });
+      return response;
+    }
+
+    // Bind the generate payload button click event
+    $("#generateTableButton").on("click", generateTable);
+  </script>
+
+  <style>
+    #whereConditionHide {
+      display: none;
+      background-color: #f2f2f2;
+      margin-bottom: 20px;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    .condition_title_and_btn_container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .condition_title {
+      font-weight: 500;
+    }
+  </style>
+</div>
