@@ -1,24 +1,69 @@
 stages:
   - build
+  - push
   - deploy
-
-services:
-  - docker:dind  # Docker-in-Docker for running Docker commands inside the runner
+  - cleanup
 
 variables:
-  DOCKER_HOST: tcp://docker:2375/
-  DOCKER_TLS_CERTDIR: ""
-
-before_script:
-  - docker info
+  IMAGE_API: $DOCKER_USERNAME/node_api:latest
+  IMAGE_FRONTEND: $DOCKER_USERNAME/react_frontend:latest
 
 build:
   stage: build
+  tags:
+    - project
+  image: docker:latest
   script:
-    - docker-compose -f docker-compose.yml build
+    - cd barnbook_api
+    - |
+      echo "BASE_URL=$BASE_URL" > .env
+      echo "DB_DIALECT=$DB_DIALECT" >> .env
+      echo "DB_HOST=$DB_HOST" >> .env
+      echo "DB_NAME=$DB_NAME" >> .env
+      echo "DB_PASSWORD=$DB_PASSWORD" >> .env
+      echo "DB_PORT=$DB_PORT" >> .env
+      echo "DB_USERNAME=$DB_USERNAME" >> .env
+      echo "NODE_ENV=$NODE_ENV" >> .env
+
+    - docker build -t $IMAGE_API .  
+    - docker build -t $IMAGE_FRONTEND ../Frontend/
+  artifacts:
+    paths:
+      - barnbook_api/.env    
+    expire_in: 1 hour
+
+push:
+  stage: push
+  tags:
+    - project
+  image: docker:latest
+  dependencies:
+    - build
+  script:
+    - cd barnbook_api
+  
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+    - docker push $IMAGE_API
+    - docker push $IMAGE_FRONTEND
 
 deploy:
   stage: deploy
+  tags:
+    - project
+  image: docker:latest
+  dependencies:
+    - build
   script:
-    - docker-compose -f docker-compose.yml up -d
+    - cd barnbook_api
+    - docker compose down
+    - docker compose up -d --build
 
+
+cleanup:
+  stage: cleanup
+  tags:
+    - project
+  image: docker:latest
+  script:
+    - docker image prune -af
