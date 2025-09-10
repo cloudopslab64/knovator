@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: backend
+  labels:
+    app: backend-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-api
+  template:
+    metadata:
+      labels:
+        app: backend-api
+    spec:
+      containers:
+        - name: backend-container
+          image: cloudopslab/node_api:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: BASE_URL
+            - name: DB_DIALECT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DB_DIALECT
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DB_HOST
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DB_NAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DB_PASSWORD
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DB_PORT
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: DB_USERNAME
+            - name: NODE_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: NODE_ENV
+
